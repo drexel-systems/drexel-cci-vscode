@@ -1,0 +1,79 @@
+body {
+    font-family: sans-serif;
+    padding: 10px;
+}
+
+summary {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 5px;
+}
+
+summary::-webkit-details-marker {
+    display: none;
+    /* Hides default triangle */
+}
+
+summary::before {
+    content: "▶";
+    /* Manually add a triangle */
+    font-size: 14px;
+    margin-right: 8px;
+    transition: transform 0.2s ease-in-out;
+}
+
+details[open] summary::before {
+    transform: rotate(90deg);
+    /* Rotate when open */
+}
+
+.summary-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.summary-text {
+    font-size: 1.0em;
+}
+
+#refresh-button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.codicon {
+    font-size: 18px; /* Adjust size */
+    filter: drop-shadow(1px 1px currentColor) drop-shadow(-1px -1px currentColor);
+    color: var(--vscode-editor-foreground);
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+li {
+    display: flex;
+    /* Enables flexbox */
+    justify-content: space-between;
+    /* Name on left, status on right */
+    align-items: center;
+    /* Ensures vertical alignment */
+    padding: 4px 8px;
+    margin: 2px 0;
+    border-radius: 5px;
+    background: #222;
+    /* Optional background color */
+    color: white;
+    /* Ensures text is visible */
+}
+
+.binary-name {
+    flex-grow: 1;
+    /* Ensures name takes up remaining space */
+}

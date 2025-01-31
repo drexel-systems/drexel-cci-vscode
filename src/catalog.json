@@ -1,0 +1,20 @@
+{
+    "courses": [
+        {
+            "id": "cs-503",
+            "name": "CS 503",
+            "cli": {
+                "supportedOs": [ "linux", "wsl" ],
+                "required": [
+                    "git",
+                    "gcc",
+                    "gdb",
+                    "make",
+                    "valgrind",
+                    "bats",
+                    "jq"
+                ]
+            }
+        }
+    ]
+}
