@@ -1,10 +1,16 @@
 import * as vscode from 'vscode';
 import * as childProcess from 'child_process';
-import {DrexelWebviewProvider} from './provider';
+import { DrexelWebviewProvider } from './provider';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const catalogPath = path.join(__dirname, 'catalog.json');
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+    const SELECTED_COURSE_KEY = 'selectedCourse';
+
     const commands = [
         { command: 'drexelCci.helloWorld', callback: sayHello },
         { command: 'drexelCci.checkRemote', callback: checkRemote }
@@ -15,11 +21,12 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(disposable);
     });
 
-	vscode.commands.registerCommand("drexelCci.getEnvironmentCheck", () => {
-        return getEnvironmentCheckData();
+    vscode.commands.registerCommand("drexelCci.getEnvironmentCheck", () => {
+        let courseId = context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
+        return getEnvironmentCheckData(courseId);
     });
 
-    const provider = new DrexelWebviewProvider(context.extensionUri);
+    const provider = new DrexelWebviewProvider(context);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('drexelCciView', provider)
     );
@@ -27,15 +34,34 @@ export function activate(context: vscode.ExtensionContext) {
     // if (vscode.env.remoteName) {
     //     console.log(`Running in remote: ${vscode.env.remoteName}`);
     // }
-    
+
 }
 
+function getRequiredBinaries(courseId: string): string[] {
+    try {
+        const rawData = fs.readFileSync(catalogPath, 'utf-8');
+        const catalog = JSON.parse(rawData);
+        
+        const course = catalog.courses.find((c: { id: string }) => c.id === courseId);
+        if (course && course.cli && Array.isArray(course.cli.required)) {
+            return course.cli.required;
+        } else {
+            console.error(`Course ID ${courseId} not found or missing required binaries`);
+            return [];
+        }
+    } catch (error) {
+        console.error('Error reading catalog.json:', error);
+        return [];
+    }
+}
 
-function getEnvironmentCheckData(): any {
-    const binaries = ['make', 'gcc', 'gdb', 'valgrind', 'jq', 'bats', 'git'];
+function getEnvironmentCheckData(courseId: string): any {
+    let requiredBinaries = getRequiredBinaries(courseId);
+
+    // const binaries = ['make', 'gcc', 'gdb', 'valgrind', 'jq', 'bats', 'git'];
     const results: { name: string; status: string }[] = [];
 
-    binaries.forEach((binary) => {
+    requiredBinaries.forEach((binary) => {
         try {
             // Check if the binary is available in the PATH
             childProcess.execSync(`command -v ${binary}`, { stdio: 'ignore' });
@@ -52,7 +78,7 @@ function getEnvironmentCheckData(): any {
         if (a.status !== b.status) {
             return statusOrder;
         }
-    
+
         // Secondary sort: Alphabetical order of `name`
         return a.name.localeCompare(b.name);
     });
@@ -76,5 +102,5 @@ function checkRemote() {
     }
 }
 
-export function deactivate() {}
+export function deactivate() { }
 

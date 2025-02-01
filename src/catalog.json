@@ -15,6 +15,16 @@
                     "jq"
                 ]
             }
+        },
+        {
+            "id": "cs-283",
+            "name": "CS 283",
+            "cli": {
+                "supportedOs": [ "linux", "wsl" ],
+                "required": [
+                    "git"
+                ]
+            }
         }
     ]
 }
