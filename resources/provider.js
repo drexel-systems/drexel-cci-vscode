@@ -1,7 +1,7 @@
 const vscode = acquireVsCodeApi();
 const okSymbol = "✅";
 const failSymbol = "❌";
-const localMsg = '<div class="status-warn">You are running locally; this is probably not what you want - connect to a remote using the blue icon in the lower-left corner.</div>';
+const localMsg = '<div class="status-warn">You are running locally; this is probably not what you want - click here to connect: <a href="#" onclick="connectToRemote()">Connect to Remote Host</a>.</div>';
 const remoteMsg = '<div class="status-success">You are running in a remote environement.</div>';
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -76,7 +76,7 @@ function updateBinaryData(savedState) {
         status.textContent = "";
         let isOk = true;
 
-        savedState.binaryCheckData.forEach(item => {
+        savedState.binaryCheckData.binaries.forEach(item => {
             const li = document.createElement("li");
             li.innerHTML = '<span class="binary-name">' + item.name + '</span><span>' + item.status + '</span>';
             list.appendChild(li);
@@ -89,8 +89,11 @@ function updateBinaryData(savedState) {
     }
 }
 
-
 function sendSelection() {
     const courseId = document.getElementById('courseDropdown').value;
     vscode.postMessage({ type: 'requestState', setCourseId: courseId });
+}
+
+function connectToRemote() {
+    vscode.postMessage({ command: 'connectToRemote' });
 }

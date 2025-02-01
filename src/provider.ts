@@ -6,13 +6,23 @@ import * as path from 'path';
 const catalogPath = path.join(__dirname, 'catalog.json');
 const SELECTED_COURSE_KEY = 'selectedCourse';
 
+interface Binary {
+    name: string;
+    status: string;
+}
+
+interface BinaryCheckData {
+    binaries: Binary[];
+    allOk: boolean;
+}
+
 export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _context: vscode.ExtensionContext;
 
-    constructor( context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext) {
         this._context = context;
-     }
+    }
 
     resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -31,8 +41,12 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
         // selection is restored if the existing view gets reloaded (like when navigating away and then back)
         const courses = this.getCourses();
         let savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
-        
+
         webviewView.webview.onDidReceiveMessage(async (message) => {
+            if (message.command === 'connectToRemote') {
+                // vscode.commands.executeCommand("workbench.view.remote");
+                vscode.commands.executeCommand("workbench.action.remote.showMenu");
+            }
 
             if (message.type === "requestState") {
                 savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
@@ -42,12 +56,28 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                     savedCourseId = message.setCourseId;
                     vscode.window.showInformationMessage("Drexel CCI: Set course id to " + message.setCourseId);
                 }
-                
-                const binaryCheckData = await vscode.commands.executeCommand("drexelCci.getEnvironmentCheck");
+
+                const binaryCheckData = await vscode.commands.executeCommand<BinaryCheckData>("drexelCci.getEnvironmentCheck");
                 const remoteName = vscode.env.remoteName || "Local";
-                
+
+                console.log(JSON.stringify(binaryCheckData));
+
+                if (binaryCheckData && !binaryCheckData.allOk) {
+                    const installCommand = "sudo apt-get update && sudo apt-get install -y " + binaryCheckData.binaries.map(b => b.name).join(" ");
+
+                    vscode.window.showWarningMessage(
+                        `Missing binaries detected! Run in a terminal:\n\n\`${installCommand}\``,
+                        "Copy Command"
+                    ).then(selection => {
+                        if (selection === "Copy Command") {
+                            vscode.env.clipboard.writeText(installCommand);
+                            vscode.window.showInformationMessage("Command copied to clipboard!");
+                        }
+                    });
+                }
+
                 webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId });
-            } 
+            }
         });
 
         // webviewView.onDidChangeVisibility(() => {
@@ -85,8 +115,8 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
         );
 
         const options = courses
-        .map(course => `<option value="${course.id}" ${course.id === selectedCourseId ? 'selected' : ''}>${course.name}</option>`)
-        .join('');
+            .map(course => `<option value="${course.id}" ${course.id === selectedCourseId ? 'selected' : ''}>${course.name}</option>`)
+            .join('');
 
         const nonce = getNonce();
 
@@ -104,33 +134,38 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
 
             <script nonce="${nonce}" src="${scriptUri}" defer></script>
 
-            Course:
-            <select id="courseDropdown" onchange="sendSelection()">
-                ${options}
-            </select>
+            <div class="course-header">
+                Course:
+                <select id="courseDropdown" onchange="sendSelection()">
+                    ${options}
+                </select>
+            </div>
+
+      
 
             <details open>
                 <summary>
                     <span class="summary-content">
-                        <span class="summary-text">Environment Check</span>
-                        <span id="env_status" class="summary-text">&nbsp;</span>
-                        <button id="refresh-button"><i class="codicon codicon-refresh"></i></button>
+                        <span class="summary-text">Operating System</span>
+                        <span id="os_status" class="summary-text">&nbsp;</span>
                     </span>
                 </summary>
                 <div class="status-container">
                     <div class="status-header">Connection: <span id="connection-name" class="conn-name" >...</span></div>
                     <div id="connection">Loading...</div>
                 </div>
-                <hr />
-                <p>Required binaries:</p>
+            </details>
+
+            <details open>
+                <summary>
+                    <span class="summary-content">
+                        <span class="summary-text">Required Binaries</span>
+                        <span id="env_status" class="summary-text">&nbsp;</span>
+                        <button id="refresh-button"><i class="codicon codicon-refresh"></i></button>
+                    </span>
+                </summary>
                 <ul id="envList">Loading...</ul>
-            </details>
-
-            <details>
-                <summary>other</summary>
-            </details>
-
-            
+            </details>           
 
             </body>
             </html>

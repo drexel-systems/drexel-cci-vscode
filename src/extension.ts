@@ -4,6 +4,8 @@ import { DrexelWebviewProvider } from './provider';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const okSymbol = "✅";
+const failSymbol = "❌";
 const catalogPath = path.join(__dirname, 'catalog.json');
 
 // This method is called when your extension is activated
@@ -57,6 +59,7 @@ function getRequiredBinaries(courseId: string): string[] {
 
 function getEnvironmentCheckData(courseId: string): any {
     let requiredBinaries = getRequiredBinaries(courseId);
+    let allOk = true;
 
     // const binaries = ['make', 'gcc', 'gdb', 'valgrind', 'jq', 'bats', 'git'];
     const results: { name: string; status: string }[] = [];
@@ -68,6 +71,7 @@ function getEnvironmentCheckData(courseId: string): any {
             results.push({ name: `${binary}`, status: "✅" });
         } catch {
             results.push({ name: `${binary}`, status: "❌" });
+            allOk = false;
         }
     });
 
@@ -83,7 +87,7 @@ function getEnvironmentCheckData(courseId: string): any {
         return a.name.localeCompare(b.name);
     });
 
-    return results;
+    return {binaries: results, allOk: allOk};
 }
 
 function sayHello() {
