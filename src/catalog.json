@@ -3,8 +3,16 @@
         {
             "id": "cs-503",
             "name": "CS 503",
+            "assignments": {
+                "repository": "SysProg-Class",
+                "owner": "drexel-systems",
+                "paths": [
+                    "assignments"
+                ],
+                "ref": "main"
+            },
             "cli": {
-                "supportedOs": [ "linux", "wsl" ],
+                "supportedOs": [ "linux", "wsl", "ssh-remote" ],
                 "required": [
                     "git",
                     "gcc",
@@ -13,16 +21,6 @@
                     "valgrind",
                     "bats",
                     "jq"
-                ]
-            }
-        },
-        {
-            "id": "cs-283",
-            "name": "CS 283",
-            "cli": {
-                "supportedOs": [ "linux", "wsl" ],
-                "required": [
-                    "git"
                 ]
             }
         }

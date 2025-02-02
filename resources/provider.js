@@ -31,7 +31,9 @@ window.addEventListener("message", (event) => {
         let state = {
             courseId: message.courseId,
             remoteName: message.remoteName,
-            binaryCheckData: message.binaryCheckData
+            assignmentDirs: message.assignmentDirs,
+            binaryCheckData: message.binaryCheckData,
+            osError: message.osError, // TODO check osError and update connection view in updateConnection
         };
 
         if (message.remoteName && message.remoteName !== "Local") {

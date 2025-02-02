@@ -1,6 +1,8 @@
 {
   "name": "drexel-cci",
-  "extensionKind": ["workspace"],
+  "extensionKind": [
+    "workspace"
+  ],
   "displayName": "drexel-cci",
   "description": "",
   "version": "0.0.1",
@@ -72,6 +74,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@octokit/rest": "^21.1.0",
     "@vscode/codicons": "^0.0.36"
   }
 }

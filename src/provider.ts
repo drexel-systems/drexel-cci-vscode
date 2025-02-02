@@ -2,6 +2,7 @@
 import * as vscode from "vscode";
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from "os";
 
 const catalogPath = path.join(__dirname, 'catalog.json');
 const SELECTED_COURSE_KEY = 'selectedCourse';
@@ -14,6 +15,25 @@ interface Binary {
 interface BinaryCheckData {
     binaries: Binary[];
     allOk: boolean;
+}
+
+interface Course {
+    id: string;
+    name: string;
+    assignments: {
+        repository: string;
+        owner: string;
+        paths: string[];
+        ref: string;
+    };
+    cli: {
+        supportedOs: string[];
+        required: string[];
+    };
+}
+
+function isOsSupported(course: Course, osName: string): boolean {
+    return course.cli.supportedOs.includes(osName);
 }
 
 export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
@@ -41,6 +61,9 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
         // selection is restored if the existing view gets reloaded (like when navigating away and then back)
         const courses = this.getCourses();
         let savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
+        
+        const assignmentsPromise =  getDirectories("drexel-systems", "SysProg-Class", "main", "assignments");
+
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
             if (message.command === 'connectToRemote') {
@@ -60,7 +83,19 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                 const binaryCheckData = await vscode.commands.executeCommand<BinaryCheckData>("drexelCci.getEnvironmentCheck");
                 const remoteName = vscode.env.remoteName || "Local";
 
-                console.log(JSON.stringify(binaryCheckData));
+                let platform: string = os.platform();
+                console.log("platform: " + platform);
+
+                if (remoteName !== "Local") {
+                    platform = remoteName;
+                }
+
+                // platform check
+                let theCourse = courses.find((course: Course) => course.id === savedCourseId) || null;
+                let osError: string = '';
+                if (!isOsSupported(theCourse, platform)) {
+                    osError = "'" + platform + "' not supported; valid: [" + theCourse.cli.supportedOs + "]";
+                }
 
                 if (binaryCheckData && !binaryCheckData.allOk) {
                     const installCommand = "sudo apt-get update && sudo apt-get install -y " + binaryCheckData.binaries.map(b => b.name).join(" ");
@@ -76,7 +111,10 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                     });
                 }
 
-                webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId });
+                // assignments
+                const assignmentDirs = await assignmentsPromise;
+
+                webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId, osError: osError, assignmentDirs: assignmentDirs});
             }
         });
 
@@ -156,7 +194,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                 </div>
             </details>
 
-            <details open>
+            <details close>
                 <summary>
                     <span class="summary-content">
                         <span class="summary-text">Required Binaries</span>
@@ -182,3 +220,58 @@ function getNonce() {
     }
     return text;
 }
+
+async function getTreeContents(owner: string, repo: string, branch: string, targetPath: string, recursive: boolean) {
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit(); // new Octokit({ auth: process.env.GITHUB_TOKEN });
+
+    const { data: branchData } = await octokit.repos.getBranch({ owner, repo, branch });
+    const treeSha = branchData.commit.commit.tree.sha;
+
+    const params: {
+        owner: string;
+        repo: string;
+        tree_sha: string;
+        recursive?: string;
+      } = {
+        owner,
+        repo,
+        tree_sha: treeSha,
+      };
+
+      if (recursive) {
+        params.recursive = "1";
+      }
+    
+
+    const { data: treeData } = await octokit.git.getTree(params);
+    return treeData.tree.filter(item => item.path !== undefined && item.path.startsWith(targetPath));
+}
+
+async function getDirectories(owner: string, repo: string, ref: string, path: string): Promise<string[]> {
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit();
+  
+    try {
+      const { data } = await octokit.repos.getContent({
+        owner,
+        repo,
+        path: path,
+        ref: ref
+      });
+  
+      // Ensure that the response is an array (i.e. a directory listing)
+      if (!Array.isArray(data)) {
+        vscode.window.showErrorMessage('The "assignments" path is not a directory.');
+        return [];
+      }
+  
+      // Filter for directories and extract their names
+      return data
+        .filter(item => item.type === 'dir')
+        .map(item => item.name);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error fetching directories: ${error}`);
+      return [];
+    }
+  }
