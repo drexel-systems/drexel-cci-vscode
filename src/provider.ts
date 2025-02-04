@@ -23,7 +23,7 @@ interface Course {
     assignments: {
         repository: string;
         owner: string;
-        paths: string[];
+        path: string,
         ref: string;
     };
     cli: {
@@ -61,9 +61,12 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
         // selection is restored if the existing view gets reloaded (like when navigating away and then back)
         const courses = this.getCourses();
         let savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
-        
-        const assignmentsPromise =  getDirectories("drexel-systems", "SysProg-Class", "main", "assignments");
+        let theCourse: Course = courses.find((course: Course) => course.id === savedCourseId) || null;
+        let assignmentsPromise: Promise<string[]> = Promise.resolve([]);
 
+        if (theCourse) {
+            assignmentsPromise = getDirectories(theCourse.assignments.owner, theCourse.assignments.repository, theCourse.assignments.ref, theCourse.assignments.path);
+        }
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
             if (message.command === 'connectToRemote') {
@@ -84,14 +87,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                 const remoteName = vscode.env.remoteName || "Local";
 
                 let platform: string = os.platform();
-                console.log("platform: " + platform);
 
-                if (remoteName !== "Local") {
-                    platform = remoteName;
-                }
-
-                // platform check
-                let theCourse = courses.find((course: Course) => course.id === savedCourseId) || null;
                 let osError: string = '';
                 if (!isOsSupported(theCourse, platform)) {
                     osError = "'" + platform + "' not supported; valid: [" + theCourse.cli.supportedOs + "]";
@@ -112,9 +108,24 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                 }
 
                 // assignments
+                let localAssignements = [];
                 const assignmentDirs = await assignmentsPromise;
+                let firstWorkspaceFolder: vscode.Uri | null = null;
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    firstWorkspaceFolder = workspaceFolders[0].uri;
+                }
 
-                webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId, osError: osError, assignmentDirs: assignmentDirs});
+                if (firstWorkspaceFolder) {
+                    for (const d of assignmentDirs) {
+                        const  exists = await folderExists(firstWorkspaceFolder, d);
+                        localAssignements.push({ existsLocal: exists, assignmentFolder: d });
+                    };
+                }
+                
+             
+
+                webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId, osError: osError, osName: platform, localAssignements: localAssignements, firstWorkspaceFolder: firstWorkspaceFolder });
             }
         });
 
@@ -177,11 +188,12 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                 <select id="courseDropdown" onchange="sendSelection()">
                     ${options}
                 </select>
+                <button id="refresh-button"><i class="codicon codicon-refresh"></i></button>
             </div>
 
       
 
-            <details open>
+            <details id="os-details" close>
                 <summary>
                     <span class="summary-content">
                         <span class="summary-text">Operating System</span>
@@ -190,20 +202,31 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                 </summary>
                 <div class="status-container">
                     <div class="status-header">Connection: <span id="connection-name" class="conn-name" >...</span></div>
-                    <div id="connection">Loading...</div>
+                    <div class="status-header">Platform: <span id="platform-name" class="conn-name" >...</span></div>
+                    <div id="connection-message">Loading...</div>
                 </div>
             </details>
 
-            <details close>
+            <details id="binaries-details" close>
                 <summary>
                     <span class="summary-content">
                         <span class="summary-text">Required Binaries</span>
                         <span id="env_status" class="summary-text">&nbsp;</span>
-                        <button id="refresh-button"><i class="codicon codicon-refresh"></i></button>
                     </span>
                 </summary>
                 <ul id="envList">Loading...</ul>
             </details>           
+
+            <details id="assignment-details" open>
+                <summary>
+                    <span class="summary-content">
+                        <span class="summary-text">Assignments</span>
+                        <span  class="summary-text">&nbsp;</span>
+                    </span>
+                </summary>
+                <ul id="assignement-list">Loading...</ul>
+                <div id="assignments-status"></div>
+            </details>    
 
             </body>
             </html>
@@ -233,16 +256,16 @@ async function getTreeContents(owner: string, repo: string, branch: string, targ
         repo: string;
         tree_sha: string;
         recursive?: string;
-      } = {
+    } = {
         owner,
         repo,
         tree_sha: treeSha,
-      };
+    };
 
-      if (recursive) {
+    if (recursive) {
         params.recursive = "1";
-      }
-    
+    }
+
 
     const { data: treeData } = await octokit.git.getTree(params);
     return treeData.tree.filter(item => item.path !== undefined && item.path.startsWith(targetPath));
@@ -251,27 +274,38 @@ async function getTreeContents(owner: string, repo: string, branch: string, targ
 async function getDirectories(owner: string, repo: string, ref: string, path: string): Promise<string[]> {
     const { Octokit } = await import('@octokit/rest');
     const octokit = new Octokit();
-  
+
     try {
-      const { data } = await octokit.repos.getContent({
-        owner,
-        repo,
-        path: path,
-        ref: ref
-      });
-  
-      // Ensure that the response is an array (i.e. a directory listing)
-      if (!Array.isArray(data)) {
-        vscode.window.showErrorMessage('The "assignments" path is not a directory.');
-        return [];
-      }
-  
-      // Filter for directories and extract their names
-      return data
-        .filter(item => item.type === 'dir')
-        .map(item => item.name);
+        const { data } = await octokit.repos.getContent({
+            owner,
+            repo,
+            path: path,
+            ref: ref
+        });
+
+        // Ensure that the response is an array (i.e. a directory listing)
+        if (!Array.isArray(data)) {
+            vscode.window.showErrorMessage('The "assignments" path is not a directory.');
+            return [];
+        }
+
+        // Filter for directories and extract their names
+        return data
+            .filter(item => item.type === 'dir')
+            .map(item => item.name);
     } catch (error) {
-      vscode.window.showErrorMessage(`Error fetching directories: ${error}`);
-      return [];
+        vscode.window.showErrorMessage(`Error fetching directories: ${error}`);
+        return [];
     }
-  }
+}
+
+async function folderExists(workspaceFolder: vscode.Uri, folderName: string): Promise<boolean> {
+    const folderUri = vscode.Uri.joinPath(workspaceFolder, folderName); // Construct folder path
+
+    try {
+        const stat = await vscode.workspace.fs.stat(folderUri);
+        return stat.type === vscode.FileType.Directory; // Ensure it's a directory
+    } catch (error) {
+        return false; // Folder does not exist
+    }
+}

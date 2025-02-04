@@ -2,17 +2,15 @@
     "courses": [
         {
             "id": "cs-503",
-            "name": "CS 503",
+            "name": "CS 503/283",
             "assignments": {
                 "repository": "SysProg-Class",
                 "owner": "drexel-systems",
-                "paths": [
-                    "assignments"
-                ],
+                "path": "assignments",
                 "ref": "main"
             },
             "cli": {
-                "supportedOs": [ "linux", "wsl", "ssh-remote" ],
+                "supportedOs": [ "linux", "wsl" ],
                 "required": [
                     "git",
                     "gcc",
