@@ -4,7 +4,8 @@
     "workspace"
   ],
   "displayName": "drexel-cci",
-  "description": "",
+  "description": "Aides Drexel CCI students with environement setup and assignement discovery",
+  "publisher": "bdlilley",
   "version": "1.0.0",
   "engines": {
     "vscode": "^1.96.0"
