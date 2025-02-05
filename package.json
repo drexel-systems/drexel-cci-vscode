@@ -3,15 +3,6 @@
   "extensionKind": [
     "workspace"
   ],
-  "files": [
-  "out",
-  "media",
-  "src",
-  "resources",
-  "package.json",
-  "README.md",
-  "CHANGELOG.md"
-],
   "displayName": "drexel-cci",
   "description": "A helper for Drexel College of Computing and Informatics (CCI) students and faculty. Helps with environment setup and assignement tracking!",
   "publisher": "bdlilley",
