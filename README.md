@@ -10,13 +10,13 @@ To get started, simply install the extension and click on the dragon icon in the
 
 Here is how it might look if you are not running on a supported host:
 
-![Unsupported Host](./resources/screenshot-errors.png)
+![Unsupported Host](media/screenshot-errors.png)
 
 # Pulling Assignments
 
 Assignment instructions and starter code can be pulled by clicking the "pull" button next to the assignement name. If a folder already exist in your workspace, a link to navigate to it is provided.
 
-![Pull Assignement](./resources/screenshot-pull.png)
+![Pull Assignement](media/screenshot-pull.png)
 
 - You must have a workspace folder open, and that folder must be a git repo (contains a .git directory)
 - If an assignement folder already exists locally, the extension will not allow you to pull and overwrite it; **if, and only if, you want to start over from scratch on an assignement, you can delete the folder locally, then pull again with the extension**
