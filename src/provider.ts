@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from "os";
 
+
 const catalogPath = path.join(__dirname, 'catalog.json');
 const SELECTED_COURSE_KEY = 'selectedCourse';
 
@@ -32,6 +33,17 @@ interface Course {
     };
 }
 
+
+interface RepoParams {
+    basePath: string;
+    owner: string;
+    repo: string;
+    dirPath: string;
+    ref: string;
+    localDir: string;
+    token?: string; // Optional GitHub personal access token for private repos
+}
+
 function isOsSupported(course: Course, osName: string): boolean {
     return course.cli.supportedOs.includes(osName);
 }
@@ -49,93 +61,140 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
-        this._view = webviewView;
+        try {
+            this._view = webviewView;
 
-        webviewView.webview.options = {
-            enableScripts: true,
-        };
+            webviewView.webview.options = {
+                enableScripts: true,
+            };
 
-        // we fetch these here and pass them to getHtml() because the course list is static with the 
-        // extension; there is no reason to pass course list through the message system to populate the
-        // select list; courseId is still set in session state by the setState event, so the correct
-        // selection is restored if the existing view gets reloaded (like when navigating away and then back)
-        const courses = this.getCourses();
-        let savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
-        let theCourse: Course = courses.find((course: Course) => course.id === savedCourseId) || null;
-        let assignmentsPromise: Promise<string[]> = Promise.resolve([]);
+            // we fetch these here and pass them to getHtml() because the course list is static with the 
+            // extension; there is no reason to pass course list through the message system to populate the
+            // select list; courseId is still set in session state by the setState event, so the correct
+            // selection is restored if the existing view gets reloaded (like when navigating away and then back)
+            const courses = this.getCourses();
+            let savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
+            let theCourse: Course = courses.find((course: Course) => course.id === savedCourseId) || null;
+            let assignmentsPromise: Promise<string[]> = Promise.resolve([]);
 
-        if (theCourse) {
-            assignmentsPromise = getDirectories(theCourse.assignments.owner, theCourse.assignments.repository, theCourse.assignments.ref, theCourse.assignments.path);
-        }
-
-        webviewView.webview.onDidReceiveMessage(async (message) => {
-            if (message.command === 'connectToRemote') {
-                // vscode.commands.executeCommand("workbench.view.remote");
-                vscode.commands.executeCommand("workbench.action.remote.showMenu");
+            if (theCourse) {
+                assignmentsPromise = getDirectories(theCourse.assignments.owner, theCourse.assignments.repository, theCourse.assignments.ref, theCourse.assignments.path);
             }
 
-            if (message.type === "requestState") {
-                savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
+            webviewView.webview.onDidReceiveMessage(async (message) => {
 
-                if (message.setCourseId) {
-                    this._context.globalState.update(SELECTED_COURSE_KEY, message.setCourseId);
-                    savedCourseId = message.setCourseId;
-                    vscode.window.showInformationMessage("Drexel CCI: Set course id to " + message.setCourseId);
+                if (message.type === "openExplorer") {
+                    let firstWorkspaceFolder: vscode.Uri | null = null;
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    if (workspaceFolders && workspaceFolders.length > 0) {
+                        firstWorkspaceFolder = workspaceFolders[0].uri;
+                    }
+
+                    if (firstWorkspaceFolder) {
+                        vscode.commands.executeCommand('workbench.view.explorer'); // Open Explorer view
+                        vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(path.join(firstWorkspaceFolder.fsPath, message.assignment))); // Select folder
+                    }
                 }
 
-                const binaryCheckData = await vscode.commands.executeCommand<BinaryCheckData>("drexelCci.getEnvironmentCheck");
-                const remoteName = vscode.env.remoteName || "Local";
+                if (message.type === "pullAssignment") {
+                    // TODO remove this duplicate code to get workspaceFolder
+                    let firstWorkspaceFolder: vscode.Uri | null = null;
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    if (workspaceFolders && workspaceFolders.length > 0) {
+                        firstWorkspaceFolder = workspaceFolders[0].uri;
+                    }
 
-                let platform: string = os.platform();
+                    if (!firstWorkspaceFolder) {
+                        vscode.window.showErrorMessage("cannot pull assignements because there is no open workspace folder");
+                        return;
+                    }
 
-                let osError: string = '';
-                if (!isOsSupported(theCourse, platform)) {
-                    osError = "'" + platform + "' not supported; valid: [" + theCourse.cli.supportedOs + "]";
-                }
+                    const localPath = path.join(firstWorkspaceFolder.fsPath, message.assignment);
+                    const localPathExists = await folderExists(firstWorkspaceFolder, message.assignment);
 
-                if (binaryCheckData && !binaryCheckData.allOk) {
-                    const installCommand = "sudo apt-get update && sudo apt-get install -y " + binaryCheckData.binaries.map(b => b.name).join(" ");
+                    if (localPathExists) {
+                        vscode.window.showErrorMessage(`cannot pull ${message.assignment} because it already exists locally`);
+                        return;
+                    }
 
-                    vscode.window.showWarningMessage(
-                        `Missing binaries detected! Run in a terminal:\n\n\`${installCommand}\``,
-                        "Copy Command"
-                    ).then(selection => {
-                        if (selection === "Copy Command") {
-                            vscode.env.clipboard.writeText(installCommand);
-                            vscode.window.showInformationMessage("Command copied to clipboard!");
-                        }
+                    await fetchAndSaveRepoDirectory({
+                        basePath: path.join(theCourse.assignments.path, message.assignment),
+                        owner: theCourse.assignments.owner,
+                        repo: theCourse.assignments.repository,
+                        dirPath: path.join(theCourse.assignments.path, message.assignment),
+                        ref: theCourse.assignments.ref,
+                        localDir: localPath,
                     });
+
+                    webviewView.webview.postMessage({ type: "viewReloaded" });
+                    vscode.window.showInformationMessage(`pulled ${message.assignment} to your local workspace folder`);
                 }
 
-                // assignments
-                let localAssignements = [];
-                const assignmentDirs = await assignmentsPromise;
-                let firstWorkspaceFolder: vscode.Uri | null = null;
-                const workspaceFolders = vscode.workspace.workspaceFolders;
-                if (workspaceFolders && workspaceFolders.length > 0) {
-                    firstWorkspaceFolder = workspaceFolders[0].uri;
+                if (message.command === 'connectToRemote') {
+                    // vscode.commands.executeCommand("workbench.view.remote");
+                    vscode.commands.executeCommand("workbench.action.remote.showMenu");
                 }
 
-                if (firstWorkspaceFolder) {
-                    for (const d of assignmentDirs) {
-                        const  exists = await folderExists(firstWorkspaceFolder, d);
-                        localAssignements.push({ existsLocal: exists, assignmentFolder: d });
-                    };
+                if (message.type === "requestState") {
+                    savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
+
+                    if (message.setCourseId) {
+                        this._context.globalState.update(SELECTED_COURSE_KEY, message.setCourseId);
+                        savedCourseId = message.setCourseId;
+                        vscode.window.showInformationMessage("Drexel CCI: Set course id to " + message.setCourseId);
+                    }
+
+                    const binaryCheckData = await vscode.commands.executeCommand<BinaryCheckData>("drexelCci.getEnvironmentCheck");
+                    const remoteName = vscode.env.remoteName || "Local";
+
+                    let platform: string = os.platform();
+
+                    let osError: string = '';
+                    if (!isOsSupported(theCourse, platform)) {
+                        osError = "'" + platform + "' not supported; valid: [" + theCourse.cli.supportedOs + "]";
+                    }
+
+                    if (binaryCheckData && !binaryCheckData.allOk) {
+                        const installCommand = "sudo apt-get update && sudo apt-get install -y " + binaryCheckData.binaries.map(b => b.name).join(" ");
+
+                        vscode.window.showWarningMessage(
+                            `Missing binaries detected! Run in a terminal:\n\n\`${installCommand}\``,
+                            "Copy Command"
+                        ).then(selection => {
+                            if (selection === "Copy Command") {
+                                vscode.env.clipboard.writeText(installCommand);
+                                vscode.window.showInformationMessage("Command copied to clipboard!");
+                            }
+                        });
+                    }
+
+                    // assignments
+                    let localAssignements = [];
+                    const assignmentDirs = await assignmentsPromise;
+                    let firstWorkspaceFolder: vscode.Uri | null = null;
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    if (workspaceFolders && workspaceFolders.length > 0) {
+                        firstWorkspaceFolder = workspaceFolders[0].uri;
+                    }
+
+                    if (firstWorkspaceFolder) {
+                        for (const d of assignmentDirs) {
+                            const exists = await folderExists(firstWorkspaceFolder, d);
+                            localAssignements.push({ existsLocal: exists, assignmentFolder: d });
+                        };
+                    }
+
+
+
+                    webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId, osError: osError, osName: platform, localAssignements: localAssignements, firstWorkspaceFolder: firstWorkspaceFolder });
                 }
-                
-             
+            });
 
-                webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId, osError: osError, osName: platform, localAssignements: localAssignements, firstWorkspaceFolder: firstWorkspaceFolder });
-            }
-        });
 
-        // webviewView.onDidChangeVisibility(() => {
-        //     if (webviewView.visible) {
-        //         webviewView.webview.postMessage({ type: "viewReloaded" });
-        //     }
-        // });
-
-        webviewView.webview.html = this.getHtml(courses, savedCourseId);
+            webviewView.webview.html = this.getHtml(courses, savedCourseId);
+        } catch (error) {
+            vscode.window.showErrorMessage(`extension failure: ${error}`);
+        }
     }
 
     private getCourses() {
@@ -144,32 +203,32 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
             const catalog = JSON.parse(rawData);
             return catalog.courses || [];
         } catch (error) {
-            console.error('Error reading catalog.json:', error);
-            return [];
+            throw new Error(`Error reading catalog.json: ${error}`);
         }
     }
 
     private getHtml(courses: { id: string; name: string }[], selectedCourseId: string): string {
-        const codiconsUri = this._view?.webview.asWebviewUri(
-            vscode.Uri.joinPath(this._context.extensionUri, "node_modules", "@vscode/codicons", "dist", "codicon.css")
-        );
+        try {
+            const codiconsUri = this._view?.webview.asWebviewUri(
+                vscode.Uri.joinPath(this._context.extensionUri, "node_modules", "@vscode/codicons", "dist", "codicon.css")
+            );
 
-        const styleUri = this._view?.webview.asWebviewUri(
-            vscode.Uri.joinPath(this._context.extensionUri, "resources", "provider.css")
-        );
+            const styleUri = this._view?.webview.asWebviewUri(
+                vscode.Uri.joinPath(this._context.extensionUri, "resources", "provider.css")
+            );
 
 
-        const scriptUri = this._view?.webview.asWebviewUri(
-            vscode.Uri.joinPath(this._context.extensionUri, "resources", "provider.js")
-        );
+            const scriptUri = this._view?.webview.asWebviewUri(
+                vscode.Uri.joinPath(this._context.extensionUri, "resources", "provider.js")
+            );
 
-        const options = courses
-            .map(course => `<option value="${course.id}" ${course.id === selectedCourseId ? 'selected' : ''}>${course.name}</option>`)
-            .join('');
+            const options = courses
+                .map(course => `<option value="${course.id}" ${course.id === selectedCourseId ? 'selected' : ''}>${course.name}</option>`)
+                .join('');
 
-        const nonce = getNonce();
+            const nonce = getNonce();
 
-        return `
+            return `
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -231,17 +290,24 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
             </body>
             </html>
         `;
+        } catch (error) {
+            throw error;
+        }
     }
 }
 
 function getNonce() {
-    let text = "";
-    const possible =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    try {
+        let text = "";
+        const possible =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        for (let i = 0; i < 32; i++) {
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+        return text;
+    } catch (error) {
+        throw error;
     }
-    return text;
 }
 
 async function getTreeContents(owner: string, repo: string, branch: string, targetPath: string, recursive: boolean) {
@@ -285,8 +351,7 @@ async function getDirectories(owner: string, repo: string, ref: string, path: st
 
         // Ensure that the response is an array (i.e. a directory listing)
         if (!Array.isArray(data)) {
-            vscode.window.showErrorMessage('The "assignments" path is not a directory.');
-            return [];
+            throw new Error('The "assignments" path is not a directory.');
         }
 
         // Filter for directories and extract their names
@@ -294,8 +359,7 @@ async function getDirectories(owner: string, repo: string, ref: string, path: st
             .filter(item => item.type === 'dir')
             .map(item => item.name);
     } catch (error) {
-        vscode.window.showErrorMessage(`Error fetching directories: ${error}`);
-        return [];
+        throw error;
     }
 }
 
@@ -307,5 +371,65 @@ async function folderExists(workspaceFolder: vscode.Uri, folderName: string): Pr
         return stat.type === vscode.FileType.Directory; // Ensure it's a directory
     } catch (error) {
         return false; // Folder does not exist
+    }
+}
+
+async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
+    const fs = require('fs-extra');
+    const { basePath, owner, repo, dirPath, ref, localDir, token } = params;
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${dirPath}?ref=${ref}`;
+
+    const headers: Record<string, string> = {};
+    if (token) {
+        headers["Authorization"] = `token ${token}`;
+    }
+
+    try {
+        const response = await fetch(apiUrl, { headers });
+        if (!response.ok) {
+            throw new Error(`GitHub API request failed: ${response.status} ${response.statusText}`);
+        }
+
+        const items = await response.json();
+
+        if (!Array.isArray(items)) {
+            throw new Error(`Unexpected response format from GitHub API`);
+        }
+
+        for (const item of items) {
+            const relativePath = path.relative(basePath, item.path);
+            const itemPath = path.join(localDir, relativePath);
+
+            if (item.type === "file") {
+                // Fetch file content
+                const fileResponse = await fetch(item.download_url, { headers });
+                if (!fileResponse.ok) {
+                    console.warn(`Failed to download ${item.path}`);
+                    continue;
+                }
+                const fileContent = await fileResponse.text();
+
+                // Ensure directory exists before writing
+                await fs.ensureDir(path.dirname(itemPath));
+
+                // Write file to local directory
+                // console.log(`wrote local file ${itemPath} from ${item.path}`);
+                await fs.writeFile(itemPath, fileContent, "utf8");
+                // console.log(`Saved: ${item.path}`);
+            } else if (item.type === "dir") {
+                // Recursively fetch directory
+                await fetchAndSaveRepoDirectory({
+                    basePath,
+                    owner,
+                    repo,
+                    dirPath: item.path,
+                    ref,
+                    localDir,
+                    token,
+                });
+            }
+        }
+    } catch (error) {
+        throw error;
     }
 }

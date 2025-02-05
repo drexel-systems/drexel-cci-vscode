@@ -9,6 +9,7 @@
   "engines": {
     "vscode": "^1.96.0"
   },
+  "repository": "https://github.com/drexel-systems/drexel-cci-vscode",
   "categories": [
     "Other"
   ],
@@ -63,6 +64,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.96.0",
@@ -75,6 +77,9 @@
   },
   "dependencies": {
     "@octokit/rest": "^21.1.0",
-    "@vscode/codicons": "^0.0.36"
+    "@vscode/codicons": "^0.0.36",
+    "fs-extra": "^11.3.0",
+    "js-sha256": "^0.11.0",
+    "node-fetch": "^3.3.2"
   }
 }

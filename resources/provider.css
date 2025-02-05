@@ -28,6 +28,36 @@ details[open] summary::before {
     /* Rotate when open */
 }
 
+.link-button {
+    background: none;
+    border: none;
+    color: var(--vscode-editor-foreground);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: inherit;
+    padding: 0;
+}
+
+.open-explorer-button {
+    margin-right: 5px;
+}
+
+.loading-span {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top-color: var(--vscode-editor-foreground);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .summary-content {
     display: flex;
     justify-content: space-between;
