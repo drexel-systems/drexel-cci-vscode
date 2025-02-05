@@ -199,6 +199,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
 
             webviewView.webview.html = this.getHtml(courses, savedCourseId);
         } catch (error) {
+            console.log(error);
             vscode.window.showErrorMessage(`extension failure: ${error}`);
         }
     }

@@ -11,34 +11,40 @@ const catalogPath = path.join(__dirname, 'catalog.json');
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-    const SELECTED_COURSE_KEY = 'selectedCourse';
+    try {
+        const SELECTED_COURSE_KEY = 'selectedCourse';
 
-    const commands = [
-        { command: 'drexelCci.helloWorld', callback: sayHello },
-        { command: 'drexelCci.checkRemote', callback: checkRemote }
-    ];
+        const commands = [
+            { command: 'drexelCci.helloWorld', callback: sayHello },
+            { command: 'drexelCci.checkRemote', callback: checkRemote }
+        ];
 
-    commands.forEach(({ command, callback }) => {
-        const disposable = vscode.commands.registerCommand(command, callback);
-        context.subscriptions.push(disposable);
-    });
+        commands.forEach(({ command, callback }) => {
+            const disposable = vscode.commands.registerCommand(command, callback);
+            context.subscriptions.push(disposable);
+        });
 
-    vscode.commands.registerCommand("drexelCci.getEnvironmentCheck", () => {
-        let courseId = context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
-        return getEnvironmentCheckData(courseId);
-    });
+        const disp = vscode.commands.registerCommand("drexelCci.getEnvironmentCheck", () => {
+            let courseId = context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
+            return getEnvironmentCheckData(courseId);
+        });
+        context.subscriptions.push(disp);
 
-    const provider = new DrexelWebviewProvider(context);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('drexelCciView', provider)
-    );
+        const provider = new DrexelWebviewProvider(context);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider('drexelCciView', provider)
+        );
+    } catch (error) {
+        console.log(error);
+        vscode.window.showErrorMessage("failed to active extension: " + error);
+    }
 }
 
 function getRequiredBinaries(courseId: string): string[] {
     try {
         const rawData = fs.readFileSync(catalogPath, 'utf-8');
         const catalog = JSON.parse(rawData);
-        
+
         const course = catalog.courses.find((c: { id: string }) => c.id === courseId);
         if (course && course.cli && Array.isArray(course.cli.required)) {
             return course.cli.required;
@@ -82,7 +88,7 @@ function getEnvironmentCheckData(courseId: string): any {
         return a.name.localeCompare(b.name);
     });
 
-    return {binaries: results, allOk: allOk};
+    return { binaries: results, allOk: allOk };
 }
 
 function sayHello() {
