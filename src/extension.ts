@@ -32,11 +32,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('drexelCciView', provider)
     );
-
-    // if (vscode.env.remoteName) {
-    //     console.log(`Running in remote: ${vscode.env.remoteName}`);
-    // }
-
 }
 
 function getRequiredBinaries(courseId: string): string[] {
