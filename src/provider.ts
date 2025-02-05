@@ -112,6 +112,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                     const localPath = path.join(firstWorkspaceFolder.fsPath, message.assignment);
                     const localPathExists = await folderExists(firstWorkspaceFolder, message.assignment);
 
+
                     if (localPathExists) {
                         vscode.window.showErrorMessage(`cannot pull ${message.assignment} because it already exists locally`);
                         return;
@@ -177,7 +178,11 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                         firstWorkspaceFolder = workspaceFolders[0].uri;
                     }
 
+                    let isGitRepo: boolean = false;
+
                     if (firstWorkspaceFolder) {
+                        isGitRepo = await folderExists(firstWorkspaceFolder, ".git");
+
                         for (const d of assignmentDirs) {
                             const exists = await folderExists(firstWorkspaceFolder, d);
                             localAssignements.push({ existsLocal: exists, assignmentFolder: d });
@@ -186,7 +191,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
 
 
 
-                    webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId, osError: osError, osName: platform, localAssignements: localAssignements, firstWorkspaceFolder: firstWorkspaceFolder });
+                    webviewView.webview.postMessage({ type: "setState", binaryCheckData: binaryCheckData, remoteName: remoteName, courseId: savedCourseId, osError: osError, osName: platform, localAssignements: localAssignements, firstWorkspaceFolder: firstWorkspaceFolder, isGitRepo: isGitRepo });
                 }
             });
 

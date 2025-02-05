@@ -112,8 +112,13 @@ function updateAssignementData(savedState) {
             list.innerHTML = "";
             status.textContent = "";
 
-            if (!savedState.firstWorkspaceFolder) {
+            if (savedState && !savedState.firstWorkspaceFolder) {
                 status.innerHTML = '<div class="status-error">no workspace folder opened; please open a folder to pull assignements</div>';
+                return;
+            }
+
+            if (savedState && !savedState.isGitRepo) {
+                status.innerHTML = '<div class="status-error">the current workspace is not a git repo; open a git repo locally before pulling assignements</div>';
                 return;
             }
 
