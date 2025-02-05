@@ -42,6 +42,7 @@ try {
                 binaryCheckData: message.binaryCheckData,
                 osError: message.osError,
                 firstWorkspaceFolder: message.firstWorkspaceFolder,
+                isGitRepo: message.isGitRepo
             };
 
             // if (message.remoteName && message.remoteName !== "Local") {

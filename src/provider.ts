@@ -181,6 +181,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                     let isGitRepo: boolean = false;
 
                     if (firstWorkspaceFolder) {
+                        console.log("checking .git");
                         isGitRepo = await folderExists(firstWorkspaceFolder, ".git");
 
                         for (const d of assignmentDirs) {
