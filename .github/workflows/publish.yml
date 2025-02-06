@@ -11,24 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0  # Ensures we get full tag history
+          node-version: 20
 
       - name: Extract version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - run: npm ci
+
+      - name: Publish to Visual Studio Marketplace
+        uses: HaaLeo/publish-vscode-extension@v1
         with:
-          node-version: 18  # Use the appropriate Node.js version
+          pat: ${{ secrets.VSCODE_MARKETPLACE }}
+          registryUrl: https://marketplace.visualstudio.com
 
-      - name: Install VSCE (Visual Studio Code Extension tool)
-        run: npm install -g @vscode/vsce
-
-      - name: Publish extension
-        run: vsce publish $VERSION
-        env:
-          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE }}  # Personal Access Token for publishing
