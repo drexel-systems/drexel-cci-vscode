@@ -181,7 +181,6 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                     let isGitRepo: boolean = false;
 
                     if (firstWorkspaceFolder) {
-                        console.log("checking .git");
                         isGitRepo = await folderExists(firstWorkspaceFolder, ".git");
 
                         for (const d of assignmentDirs) {
@@ -420,9 +419,7 @@ async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
                 await fs.ensureDir(path.dirname(itemPath));
 
                 // Write file to local directory
-                // console.log(`wrote local file ${itemPath} from ${item.path}`);
                 await fs.writeFile(itemPath, fileContent, "utf8");
-                // console.log(`Saved: ${item.path}`);
             } else if (item.type === "dir") {
                 // Recursively fetch directory
                 await fetchAndSaveRepoDirectory({
