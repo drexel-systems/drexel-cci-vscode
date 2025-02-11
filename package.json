@@ -6,7 +6,7 @@
   "displayName": "drexel-cci",
   "description": "A helper for Drexel College of Computing and Informatics (CCI) students and faculty. Helps with environment setup and assignement tracking!",
   "publisher": "bdlilley",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "icon": "resources/drexel-vscode-icon.png",
   "engines": {
     "vscode": "^1.96.0"

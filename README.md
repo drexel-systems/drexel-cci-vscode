@@ -26,6 +26,7 @@ Assignment instructions and starter code can be pulled by clicking the "pull" bu
 - Verifies you local operating system and environment
 - Provides terminal commands to install missing binaries
 - Pulls assignement direction and starter code into your local workspace
+- Creates debugger configs for each assignment
 
 ## Requirements
 
@@ -41,4 +42,5 @@ None
 
 ## Release Notes
 
-- 1.0.2 - initial release
+- 1.0.3 - initial release
+- 1.0.11 - add debugger setup
