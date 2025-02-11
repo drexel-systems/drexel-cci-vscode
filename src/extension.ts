@@ -3,6 +3,7 @@ import * as childProcess from 'child_process';
 import { DrexelWebviewProvider } from './provider';
 import * as fs from 'fs';
 import * as path from 'path';
+import {  mergeLaunchConfigs, mergeTaskConfigs } from './lib';
 
 const okSymbol = "✅";
 const failSymbol = "❌";
@@ -108,4 +109,3 @@ function checkRemote() {
 }
 
 export function deactivate() { }
-

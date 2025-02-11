@@ -3,7 +3,8 @@ import * as vscode from "vscode";
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from "os";
-
+import { getCourses2, folderExists, mergeLaunchConfigs, mergeTaskConfigs } from './lib';
+import { json } from "stream/consumers";
 
 const catalogPath = path.join(__dirname, 'catalog.json');
 const SELECTED_COURSE_KEY = 'selectedCourse';
@@ -72,7 +73,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
             // extension; there is no reason to pass course list through the message system to populate the
             // select list; courseId is still set in session state by the setState event, so the correct
             // selection is restored if the existing view gets reloaded (like when navigating away and then back)
-            const courses = this.getCourses();
+            const courses = getCourses2(catalogPath);
             let savedCourseId = this._context.globalState.get<string>(SELECTED_COURSE_KEY, 'cs-503');
             let theCourse: Course = courses.find((course: Course) => course.id === savedCourseId) || null;
             let assignmentsPromise: Promise<string[]> = Promise.resolve([]);
@@ -203,15 +204,15 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private getCourses() {
-        try {
-            const rawData = fs.readFileSync(catalogPath, 'utf-8');
-            const catalog = JSON.parse(rawData);
-            return catalog.courses || [];
-        } catch (error) {
-            throw new Error(`Error reading catalog.json: ${error}`);
-        }
-    }
+    // private getCourses() {
+    //     try {
+    //         const rawData = fs.readFileSync(catalogPath, 'utf-8');
+    //         const catalog = JSON.parse(rawData);
+    //         return catalog.courses || [];
+    //     } catch (error) {
+    //         throw new Error(`Error reading catalog.json: ${error}`);
+    //     }
+    // }
 
     private getHtml(courses: { id: string; name: string }[], selectedCourseId: string): string {
         try {
@@ -369,16 +370,7 @@ async function getDirectories(owner: string, repo: string, ref: string, path: st
     }
 }
 
-async function folderExists(workspaceFolder: vscode.Uri, folderName: string): Promise<boolean> {
-    const folderUri = vscode.Uri.joinPath(workspaceFolder, folderName); // Construct folder path
 
-    try {
-        const stat = await vscode.workspace.fs.stat(folderUri);
-        return stat.type === vscode.FileType.Directory; // Ensure it's a directory
-    } catch (error) {
-        return false; // Folder does not exist
-    }
-}
 
 async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
     const fs = require('fs-extra');
@@ -402,11 +394,15 @@ async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
             throw new Error(`Unexpected response format from GitHub API`);
         }
 
+        let taskContent: any = "";
+        let launchContent: any = "";
+
         for (const item of items) {
             const relativePath = path.relative(basePath, item.path);
             const itemPath = path.join(localDir, relativePath);
 
             if (item.type === "file") {
+
                 // Fetch file content
                 const fileResponse = await fetch(item.download_url, { headers });
                 if (!fileResponse.ok) {
@@ -420,6 +416,34 @@ async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
 
                 // Write file to local directory
                 await fs.writeFile(itemPath, fileContent, "utf8");
+
+                if (path.dirname(itemPath).endsWith(".debug")) {
+                    if (item.name === "launch.json") {
+                        const fileUri = vscode.Uri.file(itemPath);
+                        try {
+                            const fileData = await vscode.workspace.fs.readFile(fileUri);
+                            const fileContent = Buffer.from(fileData).toString('utf-8');
+                            // Parse JSON (if needed)
+                            const jsonConfig = JSON.parse(fileContent);
+                            launchContent = jsonConfig;
+                        } catch (error) {
+                            vscode.window.showErrorMessage(`Failed to read ${fileUri.fsPath}: ${error}`);
+                        }
+                    } else if (item.name === "tasks.json") {
+                        // Read tasks.json (similar approach)
+                        const fileUri = vscode.Uri.file(itemPath);
+                        try {
+                            const fileData = await vscode.workspace.fs.readFile(fileUri);
+                            const fileContent = Buffer.from(fileData).toString('utf-8');
+                            // Parse JSON (if needed)
+                            const jsonConfig = JSON.parse(fileContent);
+                            taskContent = jsonConfig;
+                        } catch (error) {
+                            vscode.window.showErrorMessage(`Failed to read ${fileUri.fsPath}: ${error}`);
+                        }
+                    }
+                }
+
             } else if (item.type === "dir") {
                 // Recursively fetch directory
                 await fetchAndSaveRepoDirectory({
@@ -431,6 +455,25 @@ async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
                     localDir,
                     token,
                 });
+            }
+        }
+
+        if (taskContent || launchContent) {
+            let firstWorkspaceFolder: vscode.Uri | null = null;
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                firstWorkspaceFolder = workspaceFolders[0].uri;
+            }
+
+            if (firstWorkspaceFolder) {
+                if (taskContent) {
+                    await mergeTaskConfigs(firstWorkspaceFolder, taskContent);
+                }
+
+                if (launchContent) {
+                    await mergeLaunchConfigs(firstWorkspaceFolder, launchContent);
+                }
             }
         }
     } catch (error) {
