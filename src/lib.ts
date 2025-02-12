@@ -2,6 +2,40 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+export interface Course {
+    id: string;
+    name: string;
+    assignments: {
+        repository: string;
+        owner: string;
+        path: string,
+        ref: string;
+    };
+    cli: {
+        supportedOs: string[];
+        required: string[];
+    };
+    extensions: string[];
+}
+
+export async function mergeExtensionConfigs(workspaceFolder: vscode.Uri, course: Course): Promise<void> {
+    try {
+        const vscodeFolder = await ensureVscodeFolderExists(workspaceFolder);
+        const extFileUri = vscode.Uri.joinPath(vscodeFolder, 'extensions.json');
+
+        const existingExtConfig = await readJsonFile(extFileUri) || { recommendations: [] };
+
+        existingExtConfig.recommendations = mergeStringArrays(
+            existingExtConfig.recommendations,
+            course.extensions || []
+        );
+
+        await writeJsonFile(extFileUri, existingExtConfig);
+    } catch (error) {
+        throw new Error(`failed to merge launch configs: ${error}`);
+    }
+}
+
 async function ensureVscodeFolderExists(workspaceFolder: vscode.Uri): Promise<vscode.Uri> {
     const vscodeFolder = vscode.Uri.joinPath(workspaceFolder, '.vscode');
 
@@ -26,6 +60,10 @@ async function readJsonFile(fileUri: vscode.Uri): Promise<any> {
 async function writeJsonFile(fileUri: vscode.Uri, content: any): Promise<void> {
     const jsonString = JSON.stringify(content, null, 4);
     await vscode.workspace.fs.writeFile(fileUri, Buffer.from(jsonString));
+}
+
+function mergeStringArrays(existingConfigs: string[], newConfigs: string[]): string[] {
+    return Array.from(new Set([...existingConfigs, ...newConfigs]));
 }
 
 function mergeConfigurations(existingConfigs: any[], newConfigs: any[], key: string): any[] {

@@ -3,8 +3,7 @@ import * as vscode from "vscode";
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from "os";
-import { getCourses2, folderExists, mergeLaunchConfigs, mergeTaskConfigs } from './lib';
-import { json } from "stream/consumers";
+import { Course, getCourses2, folderExists, mergeExtensionConfigs, mergeLaunchConfigs, mergeTaskConfigs } from './lib';
 
 const catalogPath = path.join(__dirname, 'catalog.json');
 const SELECTED_COURSE_KEY = 'selectedCourse';
@@ -19,23 +18,8 @@ interface BinaryCheckData {
     allOk: boolean;
 }
 
-interface Course {
-    id: string;
-    name: string;
-    assignments: {
-        repository: string;
-        owner: string;
-        path: string,
-        ref: string;
-    };
-    cli: {
-        supportedOs: string[];
-        required: string[];
-    };
-}
-
-
 interface RepoParams {
+    course: Course;
     basePath: string;
     owner: string;
     repo: string;
@@ -120,6 +104,7 @@ export class DrexelWebviewProvider implements vscode.WebviewViewProvider {
                     }
 
                     await fetchAndSaveRepoDirectory({
+                        course: theCourse,
                         basePath: path.join(theCourse.assignments.path, message.assignment),
                         owner: theCourse.assignments.owner,
                         repo: theCourse.assignments.repository,
@@ -374,7 +359,7 @@ async function getDirectories(owner: string, repo: string, ref: string, path: st
 
 async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
     const fs = require('fs-extra');
-    const { basePath, owner, repo, dirPath, ref, localDir, token } = params;
+    const { course, basePath, owner, repo, dirPath, ref, localDir, token } = params;
     const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${dirPath}?ref=${ref}`;
 
     const headers: Record<string, string> = {};
@@ -447,6 +432,7 @@ async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
             } else if (item.type === "dir") {
                 // Recursively fetch directory
                 await fetchAndSaveRepoDirectory({
+                    course,
                     basePath,
                     owner,
                     repo,
@@ -458,7 +444,7 @@ async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
             }
         }
 
-        if (taskContent || launchContent) {
+        if (taskContent || launchContent || course.extensions) {
             let firstWorkspaceFolder: vscode.Uri | null = null;
             const workspaceFolders = vscode.workspace.workspaceFolders;
 
@@ -473,6 +459,10 @@ async function fetchAndSaveRepoDirectory(params: RepoParams): Promise<void> {
 
                 if (launchContent) {
                     await mergeLaunchConfigs(firstWorkspaceFolder, launchContent);
+                }
+
+                if (course.extensions) {
+                    await mergeExtensionConfigs(firstWorkspaceFolder, course);
                 }
             }
         }
