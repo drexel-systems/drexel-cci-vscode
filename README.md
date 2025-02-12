@@ -27,6 +27,7 @@ Assignment instructions and starter code can be pulled by clicking the "pull" bu
 - Provides terminal commands to install missing binaries
 - Pulls assignement direction and starter code into your local workspace
 - Creates debugger configs for each assignment
+- Creates recommended extensions for each course
 
 ## Requirements
 
@@ -44,3 +45,4 @@ None
 
 - 1.0.3 - initial release
 - 1.0.11 - add debugger setup
+- 1.1.0 - Add recommended extensions
