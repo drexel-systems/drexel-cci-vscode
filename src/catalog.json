@@ -20,7 +20,13 @@
                     "bats",
                     "jq"
                 ]
-            }
+            },
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vscode.cpptools-themes",
+                "ms-vscode-remote.remote-ssh"
+            ]
         }
     ]
 }
